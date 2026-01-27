@@ -7150,6 +7150,41 @@ def ssh_down(infra, async_call):
         sdk.stream_and_get(request_id)
 
 
+@cli.group(cls=_NaturalOrderGroup)
+def mcp():
+    """SkyPilot MCP (Model Context Protocol) server commands.
+
+    MCP enables AI assistants to interact with SkyPilot functionality.
+    """
+    pass
+
+
+@mcp.command('start', cls=_DocumentedCodeCommand)
+@usage_lib.entrypoint
+def mcp_start():
+    """Start the SkyPilot MCP server.
+
+    The MCP server exposes SkyPilot functionality to AI assistants like Claude.
+    It communicates via stdio using the Model Context Protocol.
+
+    Example usage with Claude Desktop:
+
+    Add to your Claude Desktop configuration:
+
+    \b
+    {
+      "mcpServers": {
+        "skypilot": {
+          "command": "python",
+          "args": ["-m", "sky.mcp.server"]
+        }
+      }
+    }
+    """
+    from sky.mcp import server as mcp_server  # pylint: disable=import-outside-toplevel
+    mcp_server.main()
+
+
 def main():
     return cli()
 
