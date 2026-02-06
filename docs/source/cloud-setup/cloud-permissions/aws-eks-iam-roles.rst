@@ -11,6 +11,10 @@ This is useful when:
 - You want to avoid uploading credentials to pods
 - Your organization requires IAM role-based access
 
+.. tip::
+
+    This page covers setting up IAM roles for **SkyPilot task pods** to access S3. If you want to grant the **SkyPilot API server itself** AWS credentials using EKS Pod Identity (e.g., to launch EC2 instances or manage AWS resources), see :ref:`sky-api-server-aws-pod-identity`.
+
 There are two methods to assign IAM roles to Kubernetes pods:
 
 .. list-table::

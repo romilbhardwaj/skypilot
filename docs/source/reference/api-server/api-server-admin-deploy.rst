@@ -269,12 +269,11 @@ Following tabs describe how to configure credentials for different clouds on the
     .. tab-item:: AWS
         :sync: aws-creds-tab
 
-        We use static credentials to authenticate with AWS. Once you have the credentials, create a Kubernetes secret to store it.
-        We support two different options for AWS credentials.
+        We support three options for configuring AWS credentials on the API server.
 
         **Option 1: Single profile (default)**
 
-        Use this if you only need a single set of AWS credentials. Create a Kubernetes secret with your AWS access key and secret key:
+        Use this if you only need a single set of static AWS credentials. Create a Kubernetes secret with your AWS access key and secret key:
 
         .. code-block:: bash
 
@@ -409,6 +408,158 @@ Following tabs describe how to configure credentials for different clouds on the
                     --set awsCredentials.enabled=true \
                     --set awsCredentials.useCredentialsFile=true \
                     --set awsCredentials.awsSecretName=your_secret_name
+
+        .. _sky-api-server-aws-pod-identity:
+
+        **Option 3: EKS Pod Identity (no static credentials)**
+
+        If your SkyPilot API server is deployed on an **Amazon EKS** cluster, you can use `EKS Pod Identity <https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html>`_ or `IRSA <https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html>`_ to grant the API server pod AWS credentials without managing static access keys.
+
+        .. tip::
+
+            **We recommend EKS Pod Identity** for new setups. It's simpler to configure and doesn't require OIDC provider registration or service account annotations. See the `AWS documentation <https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html>`_ for more details.
+
+        With this approach, the EKS Pod Identity Agent automatically injects temporary AWS credentials into the API server pod. No Kubernetes secret with static credentials is needed.
+
+        **Prerequisites:**
+
+        - An EKS cluster with the **EKS Pod Identity Agent addon** installed
+        - AWS CLI configured with permissions to create IAM resources
+        - The SkyPilot API server Helm chart deployed (or being deployed) on the EKS cluster
+
+        **Step 1: Set environment variables**
+
+        .. code-block:: bash
+
+            # Required: Set these to match your environment
+            export EKS_CLUSTER_NAME="my-eks-cluster"
+            export AWS_REGION="us-west-2"
+            export NAMESPACE="skypilot"        # Namespace where the API server is deployed
+            export RELEASE_NAME="skypilot"     # Helm release name
+
+            # Derived automatically
+            export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+            # The API server service account name (default: <release-name>-api-sa)
+            export API_SERVER_SA="${RELEASE_NAME}-api-sa"
+
+        **Step 2: Verify Pod Identity Agent is installed**
+
+        .. code-block:: console
+
+            $ aws eks list-addons --cluster-name $EKS_CLUSTER_NAME --region $AWS_REGION
+
+        If ``eks-pod-identity-agent`` is not listed, install it:
+
+        .. code-block:: console
+
+            $ aws eks create-addon \
+                --cluster-name $EKS_CLUSTER_NAME \
+                --addon-name eks-pod-identity-agent \
+                --region $AWS_REGION
+
+        **Step 3: Create an IAM role for the API server**
+
+        Create a trust policy that allows EKS Pod Identity to assume the role:
+
+        .. code-block:: bash
+
+            cat > /tmp/api-server-trust-policy.json << EOF
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "pods.eks.amazonaws.com"
+                        },
+                        "Action": [
+                            "sts:AssumeRole",
+                            "sts:TagSession"
+                        ]
+                    }
+                ]
+            }
+            EOF
+
+            aws iam create-role \
+                --role-name SkyPilotApiServerRole \
+                --assume-role-policy-document file:///tmp/api-server-trust-policy.json
+
+        Attach the required AWS permissions. You can use ``AdministratorAccess`` for full access, or attach a :ref:`minimal SkyPilot policy <aws-minimal-policy>`:
+
+        .. code-block:: bash
+
+            # Option A: Full access (simpler)
+            aws iam attach-role-policy \
+                --role-name SkyPilotApiServerRole \
+                --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+
+            # Option B: Minimal permissions (more secure)
+            # Create a policy with the minimal SkyPilot permissions first,
+            # then attach it:
+            # aws iam attach-role-policy \
+            #     --role-name SkyPilotApiServerRole \
+            #     --policy-arn arn:aws:iam::${AWS_ACCOUNT_ID}:policy/minimal-skypilot-policy
+
+        **Step 4: Create Pod Identity association**
+
+        .. code-block:: bash
+
+            export IAM_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/SkyPilotApiServerRole"
+
+            aws eks create-pod-identity-association \
+                --cluster-name $EKS_CLUSTER_NAME \
+                --namespace $NAMESPACE \
+                --service-account $API_SERVER_SA \
+                --role-arn $IAM_ROLE_ARN \
+                --region $AWS_REGION
+
+        **Step 5: Restart the API server pod**
+
+        The API server pod must be restarted to pick up the injected credentials:
+
+        .. code-block:: bash
+
+            kubectl rollout restart deployment/${RELEASE_NAME}-api-server -n $NAMESPACE
+
+        **Step 6: Verify credentials**
+
+        Verify the API server can access AWS:
+
+        .. code-block:: bash
+
+            API_SERVER_POD_NAME=$(kubectl get pods -n $NAMESPACE -l app=${RELEASE_NAME}-api -o jsonpath='{.items[0].metadata.name}')
+            kubectl exec $API_SERVER_POD_NAME -n $NAMESPACE -- env | grep AWS
+
+        You should see ``AWS_CONTAINER_CREDENTIALS_FULL_URI`` and ``AWS_CONTAINER_AUTHORIZATION_TOKEN`` environment variables, which indicate that Pod Identity credentials are being injected.
+
+        .. note::
+
+            When using EKS Pod Identity, you do **not** need to set ``awsCredentials.enabled=true`` or create any Kubernetes secret with static credentials. The Pod Identity Agent handles credential injection automatically.
+
+        .. tip::
+
+            If you also want SkyPilot task pods running on EKS to access S3 buckets using IAM roles (without static credentials), see :ref:`aws-eks-iam-roles` for setting up IAM roles for task pods.
+
+        .. dropdown:: Using IRSA instead of Pod Identity
+
+            If you prefer to use IRSA (IAM Roles for Service Accounts) instead of EKS Pod Identity, you can annotate the API server's service account with the IAM role ARN. First, follow the IRSA setup steps in the `AWS documentation <https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html>`_ to create an IAM role with an OIDC trust policy.
+
+            Then, annotate the service account when deploying the Helm chart:
+
+            .. code-block:: bash
+
+                helm upgrade --install $RELEASE_NAME skypilot/skypilot-nightly --devel \
+                    --namespace $NAMESPACE \
+                    --reuse-values \
+                    --set rbac.serviceAccountAnnotations."eks\.amazonaws\.com/role-arn"=$IAM_ROLE_ARN
+
+            After upgrading, restart the API server:
+
+            .. code-block:: bash
+
+                kubectl rollout restart deployment/${RELEASE_NAME}-api-server -n $NAMESPACE
 
     .. tab-item:: GCP
         :sync: gcp-creds-tab
