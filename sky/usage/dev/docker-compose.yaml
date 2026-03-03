@@ -1,0 +1,63 @@
+# Dev Loki stack: Loki + collector nginx + viewer nginx + Grafana.
+# Usage: docker compose up -d
+
+services:
+  loki:
+    image: grafana/loki:3.3.0
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./loki-local-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    networks:
+      - loki-net
+    restart: unless-stopped
+
+  collector:
+    image: nginx:1.25-alpine
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./nginx-collector.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - loki
+    networks:
+      - loki-net
+    restart: unless-stopped
+
+  viewer:
+    image: nginx:1.25-alpine
+    ports:
+      - "3225:3225"
+    volumes:
+      - ./nginx-viewer.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - loki
+      - grafana
+    networks:
+      - loki-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=skypilot-dev
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+    networks:
+      - loki-net
+    restart: unless-stopped
+
+volumes:
+  loki-data:
+  grafana-data:
+
+networks:
+  loki-net:
+    driver: bridge
