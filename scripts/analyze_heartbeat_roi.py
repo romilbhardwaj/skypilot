@@ -1145,6 +1145,14 @@ def print_report(analyzer: HeartbeatAnalyzer,
         else:
             print(f'      (no queue data)')
 
+        # Server summary totals
+        total_alloc_hrs = sum(
+            s['allocated_gpu_hours'] for s in gpu_hrs.values())
+        total_idle_hrs = sum(
+            s['idle_gpu_hours'] for s in gpu_hrs.values())
+        print(f'\n    Total Allocated GPU-Hours: {total_alloc_hrs:.1f}')
+        print(f'    Total Idle GPU-Hours: {total_idle_hrs:.1f}')
+
 
 def main():
     parser = argparse.ArgumentParser(
