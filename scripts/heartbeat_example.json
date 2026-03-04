@@ -1,0 +1,474 @@
+{
+  "schema_version": 1,
+  "start_time": 1772588973882510848,
+  "send_time": 1772588973882528000,
+  "interval_seconds": 600,
+  "hostname": "Mac.attlocal.net",
+  "release_name": null,
+  "server_hash": "5a58ba5d",
+  "sky_version": "1.0.0-dev0",
+  "ingress_host": null,
+  "plugins": {
+    "billing": {
+      "contexts": [
+        {
+          "context_name": "coreweave-dev",
+          "infra_type": "kubernetes",
+          "nodes": {
+            "total": 4,
+            "ready": 4,
+            "cordoned": 0
+          },
+          "cpus": {
+            "total": 1024.0,
+            "allocated": 51.19
+          },
+          "memory_gb": {
+            "total": 7049.15,
+            "allocated": 140.01
+          },
+          "gpus": {
+            "total": 16,
+            "allocated": 3,
+            "by_type": {
+              "H100": {
+                "total": 16,
+                "allocated": 3
+              }
+            }
+          },
+          "skypilot_clusters": 9,
+          "skypilot_pods": 10,
+          "cluster_resources": [
+            {
+              "name": "d64-43dbb4ab",
+              "pods": 1,
+              "cpus": 0.1,
+              "memory_gb": 0.1,
+              "gpus": 0
+            },
+            {
+              "name": "d74-43dbb4ab",
+              "pods": 1,
+              "cpus": 0.1,
+              "memory_gb": 0.1,
+              "gpus": 0
+            },
+            {
+              "name": "dashboard-test-2-bfbffbc0",
+              "pods": 1,
+              "cpus": 4.0,
+              "memory_gb": 16.0,
+              "gpus": 1
+            },
+            {
+              "name": "devspace-dev-1c1080f4-91258d25",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 4.0,
+              "gpus": 0
+            },
+            {
+              "name": "devspace-test-ide-1-e5-sa-e5ead4550a3870a2",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 2.0,
+              "gpus": 0
+            },
+            {
+              "name": "devspace-zhwu-claude-87647d2f-9c8ef77e",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 2.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-ca77-rsonecha-5a58ba5d",
+              "pods": 2,
+              "cpus": 8.0,
+              "memory_gb": 32.0,
+              "gpus": 2
+            },
+            {
+              "name": "sky-jobs-controller-f85d68f2-f85d68f2",
+              "pods": 1,
+              "cpus": 1.0,
+              "memory_gb": 1.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-serve-controller-bfbffbc0-bfbffbc0",
+              "pods": 1,
+              "cpus": 4.0,
+              "memory_gb": 8.0,
+              "gpus": 0
+            }
+          ]
+        },
+        {
+          "context_name": "coreweave-prod",
+          "infra_type": "kubernetes",
+          "nodes": {
+            "total": 3,
+            "ready": 3,
+            "cordoned": 0
+          },
+          "cpus": {
+            "total": 512.0,
+            "allocated": 68.08
+          },
+          "memory_gb": {
+            "total": 5035.15,
+            "allocated": 239.08
+          },
+          "gpus": {
+            "total": 8,
+            "allocated": 4,
+            "by_type": {
+              "H200": {
+                "total": 8,
+                "allocated": 4
+              }
+            }
+          },
+          "skypilot_clusters": 3,
+          "skypilot_pods": 3,
+          "cluster_resources": [
+            {
+              "name": "dashboard-test-1-bfbffbc0",
+              "pods": 1,
+              "cpus": 4.0,
+              "memory_gb": 16.0,
+              "gpus": 1
+            },
+            {
+              "name": "sky-jobs-controller-9afdf8b8-9afdf8b8",
+              "pods": 1,
+              "cpus": 32.0,
+              "memory_gb": 128.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-serve-controller-9b08ce0e-9b08ce0e",
+              "pods": 1,
+              "cpus": 4.0,
+              "memory_gb": 4.0,
+              "gpus": 0
+            }
+          ]
+        },
+        {
+          "context_name": "nebius-mk8s-rohan-dev",
+          "infra_type": "kubernetes",
+          "nodes": {
+            "total": 3,
+            "ready": 3,
+            "cordoned": 0
+          },
+          "cpus": {
+            "total": 20.0,
+            "allocated": 9.02
+          },
+          "memory_gb": {
+            "total": 78.3,
+            "allocated": 33.74
+          },
+          "gpus": {
+            "total": 2,
+            "allocated": 2,
+            "by_type": {
+              "L40S": {
+                "total": 2,
+                "allocated": 2
+              }
+            }
+          },
+          "skypilot_clusters": 1,
+          "skypilot_pods": 2,
+          "cluster_resources": [
+            {
+              "name": "ac-sft-sa-468f3c67e3d32828",
+              "pods": 2,
+              "cpus": 8.0,
+              "memory_gb": 32.0,
+              "gpus": 2
+            }
+          ]
+        },
+        {
+          "context_name": "nebius-mk8s-sj-gpu-cluster",
+          "infra_type": "kubernetes",
+          "nodes": {
+            "total": 1,
+            "ready": 1,
+            "cordoned": 0
+          },
+          "cpus": {
+            "total": 8.0,
+            "allocated": 3.18
+          },
+          "memory_gb": {
+            "total": 31.34,
+            "allocated": 3.77
+          },
+          "gpus": {
+            "total": 1,
+            "allocated": 0,
+            "by_type": {
+              "L40S": {
+                "total": 1,
+                "allocated": 0
+              }
+            }
+          },
+          "skypilot_clusters": 5,
+          "skypilot_pods": 6,
+          "cluster_resources": [
+            {
+              "name": "sky-0d64-seungjinyang-2dae7533",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 2.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-976a-seungjinyang-2dae7533",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 2.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-ab1d-seungjinyang-2dae7533",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 2.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-cbb9-seungjinyang-2dae7533",
+              "pods": 2,
+              "cpus": 4.0,
+              "memory_gb": 4.0,
+              "gpus": 0
+            },
+            {
+              "name": "sky-dbaa-seungjinyang-2dae7533",
+              "pods": 1,
+              "cpus": 2.0,
+              "memory_gb": 2.0,
+              "gpus": 0
+            }
+          ]
+        }
+      ]
+    },
+    "kueue": {
+      "contexts": [
+        {
+          "context": "coreweave-dev",
+          "kueue_enabled": true,
+          "cluster_queues": [
+            {
+              "name": "ml-team",
+              "admitted_workloads": 0,
+              "num_pending_workloads": 0,
+              "flavors_reservation": [
+                {
+                  "name": "default-flavor",
+                  "resources": [
+                    {
+                      "borrowed": "0",
+                      "name": "cpu",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "memory",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "nvidia.com/gpu",
+                      "total": "0"
+                    }
+                  ]
+                }
+              ],
+              "flavors_usage": [
+                {
+                  "name": "default-flavor",
+                  "resources": [
+                    {
+                      "borrowed": "0",
+                      "name": "cpu",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "memory",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "nvidia.com/gpu",
+                      "total": "0"
+                    }
+                  ]
+                }
+              ],
+              "pending_workloads": []
+            },
+            {
+              "name": "prod-team",
+              "admitted_workloads": 0,
+              "num_pending_workloads": 0,
+              "flavors_reservation": [
+                {
+                  "name": "default-flavor",
+                  "resources": [
+                    {
+                      "borrowed": "0",
+                      "name": "cpu",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "memory",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "nvidia.com/gpu",
+                      "total": "0"
+                    }
+                  ]
+                }
+              ],
+              "flavors_usage": [
+                {
+                  "name": "default-flavor",
+                  "resources": [
+                    {
+                      "borrowed": "0",
+                      "name": "cpu",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "memory",
+                      "total": "0"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "nvidia.com/gpu",
+                      "total": "0"
+                    }
+                  ]
+                }
+              ],
+              "pending_workloads": []
+            }
+          ],
+          "preempted_events": 0
+        },
+        {
+          "context": "coreweave-prod",
+          "kueue_enabled": true,
+          "cluster_queues": [],
+          "preempted_events": 0
+        },
+        {
+          "context": "nebius-mk8s-rohan-dev",
+          "kueue_enabled": false
+        },
+        {
+          "context": "nebius-mk8s-sj-gpu-cluster",
+          "kueue_enabled": true,
+          "cluster_queues": [
+            {
+              "name": "skypilot-default-queue",
+              "admitted_workloads": 1,
+              "num_pending_workloads": 4,
+              "flavors_reservation": [
+                {
+                  "name": "default-flavor",
+                  "resources": [
+                    {
+                      "borrowed": "0",
+                      "name": "cpu",
+                      "total": "2"
+                    },
+                    {
+                      "borrowed": "1953125Ki",
+                      "name": "memory",
+                      "total": "1953125Ki"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "nvidia.com/gpu",
+                      "total": "0"
+                    }
+                  ]
+                }
+              ],
+              "flavors_usage": [
+                {
+                  "name": "default-flavor",
+                  "resources": [
+                    {
+                      "borrowed": "0",
+                      "name": "cpu",
+                      "total": "2"
+                    },
+                    {
+                      "borrowed": "1953125Ki",
+                      "name": "memory",
+                      "total": "1953125Ki"
+                    },
+                    {
+                      "borrowed": "0",
+                      "name": "nvidia.com/gpu",
+                      "total": "0"
+                    }
+                  ]
+                }
+              ],
+              "pending_workloads": [
+                {
+                  "cluster_name_on_cloud": "sky-0d64-seungjinyang-2dae7533",
+                  "position": 0,
+                  "pod_name": "sky-0d64-seungjinyang-2dae7533-head",
+                  "priority": 0,
+                  "num_pods": 1
+                },
+                {
+                  "cluster_name_on_cloud": "sky-ab1d-seungjinyang-2dae7533",
+                  "position": 1,
+                  "pod_name": "sky-ab1d-seungjinyang-2dae7533-head",
+                  "priority": 0,
+                  "num_pods": 1
+                },
+                {
+                  "cluster_name_on_cloud": "sky-dbaa-seungjinyang-2dae7533",
+                  "position": 2,
+                  "pod_name": "sky-dbaa-seungjinyang-2dae7533-head",
+                  "priority": 0,
+                  "num_pods": 1
+                },
+                {
+                  "cluster_name_on_cloud": "sky-cbb9-seungjinyang-2dae7533",
+                  "position": 3,
+                  "pod_name": "sky-cbb9-seungjinyang-2dae7533-head",
+                  "priority": 0,
+                  "num_pods": 2
+                }
+              ]
+            }
+          ],
+          "preempted_events": 0
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "_description": "Example server heartbeat message as stored in Loki. Stream label: type=server_heartbeat, environment=dev|prod, schema_version=1. The JSON below is the log line value. Based on real production heartbeat from heartbeat_example.json.",
+  "_loki_push_format": {
+    "streams": [{
+      "stream": {
+        "type": "server_heartbeat",
+        "environment": "dev",
+        "schema_version": "1"
+      },
+      "values": [
+        ["<nanosecond_timestamp_string>", "<json_heartbeat_string>"]
+      ]
+    }]
+  },
+  "_heartbeat_schema": {
+    "schema_version": 1,
+    "start_time": "<int: nanosecond timestamp>",
+    "send_time": "<int: nanosecond timestamp>",
+    "interval_seconds": 600,
+    "hostname": "<string: server hostname>",
+    "release_name": "<string|null: Helm release name, null for non-Helm>",
+    "server_hash": "<string: unique server identifier, primary grouping key>",
+    "sky_version": "<string: SkyPilot version>",
+    "ingress_host": "<string|null>",
+    "plugins": {
+      "billing": {
+        "contexts": [
+          {
+            "context_name": "<string: K8s context name>",
+            "infra_type": "<string: e.g. 'kubernetes'>",
+            "nodes": {
+              "total": "<int>",
+              "ready": "<int>",
+              "cordoned": "<int>"
+            },
+            "cpus": {
+              "total": "<float>",
+              "allocated": "<float>"
+            },
+            "memory_gb": {
+              "total": "<float>",
+              "allocated": "<float>"
+            },
+            "gpus": {
+              "total": "<int>",
+              "allocated": "<int>",
+              "by_type": {
+                "<GPU_TYPE e.g. H100>": {
+                  "total": "<int>",
+                  "allocated": "<int>"
+                }
+              }
+            },
+            "skypilot_clusters": "<int>",
+            "skypilot_pods": "<int>",
+            "cluster_resources": [
+              {
+                "name": "<string: cluster name>",
+                "pods": "<int>",
+                "cpus": "<float>",
+                "memory_gb": "<float>",
+                "gpus": "<int>"
+              }
+            ]
+          }
+        ]
+      },
+      "kueue": {
+        "contexts": [
+          {
+            "context": "<string: K8s context name, matches billing context_name>",
+            "kueue_enabled": "<bool>",
+            "cluster_queues": [
+              {
+                "name": "<string: queue name>",
+                "admitted_workloads": "<int>",
+                "num_pending_workloads": "<int>",
+                "flavors_reservation": [
+                  {
+                    "name": "<string: flavor name>",
+                    "resources": [
+                      {
+                        "name": "<string: resource name, e.g. 'nvidia.com/gpu', 'cpu', 'memory'>",
+                        "total": "<string: integer or K8s quantity like '1953125Ki'>",
+                        "borrowed": "<string: integer or K8s quantity>"
+                      }
+                    ]
+                  }
+                ],
+                "flavors_usage": [
+                  {
+                    "name": "<string: flavor name>",
+                    "resources": [
+                      {
+                        "name": "<string>",
+                        "total": "<string>",
+                        "borrowed": "<string>"
+                      }
+                    ]
+                  }
+                ],
+                "pending_workloads": [
+                  {
+                    "cluster_name_on_cloud": "<string>",
+                    "position": "<int>",
+                    "pod_name": "<string>",
+                    "priority": "<int>",
+                    "num_pods": "<int>"
+                  }
+                ]
+              }
+            ],
+            "preempted_events": "<int>"
+          }
+        ]
+      }
+    }
+  },
+  "_notes": {
+    "flavors_reservation.resources[].total_and_borrowed": "STRING representations — usually integers but can be K8s quantities like '1953125Ki' for memory",
+    "billing_context_name_vs_kueue_context": "billing uses 'context_name', kueue uses 'context' — they should match for cross-referencing GPU types",
+    "gpus_by_type_keys": "GPU type names like H100, A100, T4, L40S, H200, L4, V100",
+    "kueue_enabled_false": "When kueue_enabled=false, cluster_queues and preempted_events may be absent entirely",
+    "pending_workloads_field": "num_pending_workloads is the count (int). pending_workloads is the detailed list of pending workload objects.",
+    "server_hash": "Primary grouping key for per-server analysis",
+    "release_name": "Helm release name; null for non-Helm deployments (e.g. dev laptops)"
+  }
+}
