@@ -1168,7 +1168,11 @@ def print_report(analyzer: HeartbeatAnalyzer,
         print(f'\n    Total Allocated GPU-Hours: {total_alloc_hrs:.1f}')
         print(f'    Total Idle GPU-Hours: {total_idle_hrs:.1f}')
         print(f'    Total Borrowed GPU-Hours: {total_gpu_hrs:.1f}')
-        print(f'    Estimated ROI: ${total_roi:.2f}')
+        range_hrs = _parse_range(range_str) / 3600.0
+        yearly_roi = (total_roi / range_hrs * 8760
+                      if range_hrs > 0 else 0)
+        print(f'    Estimated ROI for {range_str}: ${total_roi:.2f}')
+        print(f'    Estimated ROI per year: ${yearly_roi:,.2f}')
 
         # Kueue Queue Health
         qh_stats = analyzer.kueue_queue_health_stats(hbs)
