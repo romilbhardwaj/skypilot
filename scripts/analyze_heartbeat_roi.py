@@ -244,14 +244,21 @@ class HeartbeatAnalyzer:
     def gpu_allocation_stats(
         self, heartbeats: List[dict]
     ) -> Dict[str, Dict[str, Any]]:
-        """Compute per-context GPU allocation stats (across all types).
+        """Compute per-context GPU allocation stats with per-type breakdown.
 
         Returns:
             {context: {total_gpus, allocated_avg, allocated_min,
-                       allocated_max, util_pct_avg}}
+                       allocated_max, util_pct_avg,
+                       by_type: {gpu_type: {total, alloc_avg,
+                                            alloc_min, alloc_max,
+                                            util_pct_avg}}}}
         """
         # Collect per-context per-heartbeat totals
         ctx_data: Dict[str, List[Tuple[int, int]]] = defaultdict(list)
+        # Per-context per-type: list of (total, allocated)
+        ctx_type_data: Dict[str, Dict[str, List[Tuple[int, int]]]] = \
+            defaultdict(lambda: defaultdict(list))
+
         for hb in heartbeats:
             billing = hb.get('plugins', {}).get('billing', {})
             for ctx in billing.get('contexts', []):
@@ -260,6 +267,10 @@ class HeartbeatAnalyzer:
                 total = gpus.get('total', 0)
                 allocated = gpus.get('allocated', 0)
                 ctx_data[ctx_name].append((total, allocated))
+                for gpu_type, counts in gpus.get('by_type', {}).items():
+                    ctx_type_data[ctx_name][gpu_type].append(
+                        (counts.get('total', 0),
+                         counts.get('allocated', 0)))
 
         stats = {}
         for ctx_name, samples in ctx_data.items():
@@ -271,12 +282,32 @@ class HeartbeatAnalyzer:
             max_alloc = max(allocs) if allocs else 0
             util_pct = (avg_alloc / max_total *
                         100) if max_total > 0 else 0
+
+            by_type = {}
+            for gpu_type, type_samples in ctx_type_data[ctx_name].items():
+                t_totals = [s[0] for s in type_samples]
+                t_allocs = [s[1] for s in type_samples]
+                t_max = max(t_totals) if t_totals else 0
+                t_avg = (sum(t_allocs) / len(t_allocs)
+                         if t_allocs else 0)
+                t_min = min(t_allocs) if t_allocs else 0
+                t_max_a = max(t_allocs) if t_allocs else 0
+                t_util = (t_avg / t_max * 100) if t_max > 0 else 0
+                by_type[gpu_type] = {
+                    'total': t_max,
+                    'alloc_avg': t_avg,
+                    'alloc_min': t_min,
+                    'alloc_max': t_max_a,
+                    'util_pct_avg': t_util,
+                }
+
             stats[ctx_name] = {
                 'total_gpus': max_total,
                 'allocated_avg': avg_alloc,
                 'allocated_min': min_alloc,
                 'allocated_max': max_alloc,
                 'util_pct_avg': util_pct,
+                'by_type': by_type,
             }
         return stats
 
@@ -1048,7 +1079,7 @@ def print_report(analyzer: HeartbeatAnalyzer,
 
         # GPU Allocation
         gpu_stats = analyzer.gpu_allocation_stats(hbs)
-        print(f'\n    GPU Allocation (across all types):')
+        print(f'\n    GPU Allocation:')
         if gpu_stats:
             print(f'      {"Context":<25s} {"Total GPUs":<13s} '
                   f'{"Allocated (avg/min/max)":<28s} {"Util% (avg)"}')
@@ -1058,6 +1089,15 @@ def print_report(analyzer: HeartbeatAnalyzer,
                              f'{s["allocated_max"]}')
                 print(f'      {ctx:<25s} {s["total_gpus"]:<13d} '
                       f'{alloc_str:<28s} {s["util_pct_avg"]:.1f}%')
+                for gpu_type, ts in sorted(
+                        s.get('by_type', {}).items()):
+                    t_alloc_str = (f'{ts["alloc_avg"]:.1f} / '
+                                   f'{ts["alloc_min"]} / '
+                                   f'{ts["alloc_max"]}')
+                    print(f'        {gpu_type:<23s} '
+                          f'{ts["total"]:<13d} '
+                          f'{t_alloc_str:<28s} '
+                          f'{ts["util_pct_avg"]:.1f}%')
         else:
             print(f'      (no GPU data)')
 
