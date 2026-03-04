@@ -609,12 +609,19 @@ class HeartbeatAnalyzer:
                         'roi': type_gpu_hrs * type_price,
                     }
 
+            # Use blended per-type pricing when available;
+            # otherwise fall back to dominant-type pricing.
+            if by_type:
+                roi_total = sum(v['roi'] for v in by_type.values())
+            else:
+                roi_total = sum(roi_vals)
+
             stats[ctx][queue] = {
                 'borrowed_avg': avg_b,
                 'borrowed_min': min(borrowed_vals) if borrowed_vals else 0,
                 'borrowed_max': max(borrowed_vals) if borrowed_vals else 0,
                 'gpu_hours': gpu_hours,
-                'roi_total': sum(roi_vals),
+                'roi_total': roi_total,
                 'gpu_type': recs[0]['gpu_type'] if recs else 'H100',
                 'by_type': by_type,
             }
