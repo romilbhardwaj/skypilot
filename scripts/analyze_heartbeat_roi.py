@@ -283,6 +283,19 @@ class HeartbeatAnalyzer:
     def _context_gpu_types(
             self, heartbeats: List[dict]) -> Dict[str, str]:
         """Determine dominant GPU type per context from billing data."""
+        ctx_gpu_counts = self._context_gpu_mix(heartbeats)
+        result = {}
+        for ctx_name, gpu_types in ctx_gpu_counts.items():
+            if gpu_types:
+                best = max(gpu_types.keys(),
+                           key=lambda g: self.price_table.get_price(g))
+                result[ctx_name] = best
+        return result
+
+    def _context_gpu_mix(
+            self,
+            heartbeats: List[dict]) -> Dict[str, Dict[str, int]]:
+        """Get cumulative GPU counts per type per context."""
         ctx_gpu_counts: Dict[str, Dict[str, int]] = defaultdict(
             lambda: defaultdict(int))
         for hb in heartbeats:
@@ -293,15 +306,7 @@ class HeartbeatAnalyzer:
                 for gpu_type, counts in by_type.items():
                     ctx_gpu_counts[ctx_name][gpu_type] += counts.get(
                         'total', 0)
-
-        result = {}
-        for ctx_name, gpu_types in ctx_gpu_counts.items():
-            if gpu_types:
-                # Use the most expensive GPU type present
-                best = max(gpu_types.keys(),
-                           key=lambda g: self.price_table.get_price(g))
-                result[ctx_name] = best
-        return result
+        return dict(ctx_gpu_counts)
 
     def fleet_overview(self,
                        servers: Dict[str, dict]) -> Dict[str, Any]:
@@ -532,11 +537,17 @@ class HeartbeatAnalyzer:
     ) -> Dict[str, Dict[str, Dict[str, Any]]]:
         """Compute per-context, per-queue Kueue borrowing stats.
 
+        Borrowed GPUs are distributed proportionally across GPU types
+        present in each context (from billing data) for the by_type
+        breakdown.
+
         Returns:
             {context: {queue: {borrowed_avg, borrowed_min, borrowed_max,
-                               gpu_hours, roi_total, gpu_type}}}
+                               gpu_hours, roi_total, gpu_type,
+                               by_type: {gpu_type: {gpu_hours, roi}}}}}
         """
         records = self.kueue_borrowing_timeseries(heartbeats)
+        gpu_mix = self._context_gpu_mix(heartbeats)
 
         # Group by (context, queue)
         groups: Dict[Tuple[str, str],
@@ -553,6 +564,20 @@ class HeartbeatAnalyzer:
             gpu_hours = sum(r['roi_value'] / self.price_table.get_price(
                 r['gpu_type']) for r in recs if r['roi_value'] > 0)
 
+            # Per-GPU-type breakdown: distribute proportionally
+            ctx_types = gpu_mix.get(ctx, {})
+            total_ctx_gpus = sum(ctx_types.values())
+            by_type: Dict[str, Dict[str, float]] = {}
+            if total_ctx_gpus > 0 and gpu_hours > 0:
+                for gtype, gcount in sorted(ctx_types.items()):
+                    frac = gcount / total_ctx_gpus
+                    type_gpu_hrs = gpu_hours * frac
+                    type_price = self.price_table.get_price(gtype)
+                    by_type[gtype] = {
+                        'gpu_hours': type_gpu_hrs,
+                        'roi': type_gpu_hrs * type_price,
+                    }
+
             stats[ctx][queue] = {
                 'borrowed_avg': avg_b,
                 'borrowed_min': min(borrowed_vals) if borrowed_vals else 0,
@@ -560,6 +585,7 @@ class HeartbeatAnalyzer:
                 'gpu_hours': gpu_hours,
                 'roi_total': sum(roi_vals),
                 'gpu_type': recs[0]['gpu_type'] if recs else 'H100',
+                'by_type': by_type,
             }
         return dict(stats)
 
@@ -1084,6 +1110,13 @@ def print_report(analyzer: HeartbeatAnalyzer,
                         f'{borrow_str:<26s} '
                         f'{s["gpu_hours"]:<10.1f} '
                         f'${s["roi_total"]:.2f}')
+                    for gtype, gstats in sorted(
+                            s.get('by_type', {}).items()):
+                        print(
+                            f'        {gtype:<23s} {"":18s} '
+                            f'{"":26s} '
+                            f'{gstats["gpu_hours"]:<10.1f} '
+                            f'${gstats["roi"]:.2f}')
         else:
             print(f'      (no borrowing in period)')
 
