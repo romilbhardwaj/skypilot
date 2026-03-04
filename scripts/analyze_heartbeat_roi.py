@@ -303,6 +303,181 @@ class HeartbeatAnalyzer:
                 result[ctx_name] = best
         return result
 
+    def fleet_overview(self,
+                       servers: Dict[str, dict]) -> Dict[str, Any]:
+        """Compute aggregate fleet metrics from the latest heartbeat per server.
+
+        Returns:
+            {num_servers, num_contexts, total_gpus, gpus_by_type,
+             total_nodes, nodes_ready, total_clusters, total_pods}
+        """
+        total_gpus = 0
+        gpus_by_type: Dict[str, int] = defaultdict(int)
+        total_nodes = 0
+        nodes_ready = 0
+        total_clusters = 0
+        total_pods = 0
+        contexts_seen: set = set()
+
+        for _sh, info in servers.items():
+            hbs = info['heartbeats']
+            if not hbs:
+                continue
+            # Use latest heartbeat per server
+            latest = max(hbs, key=lambda h: h.get('send_time', 0))
+            billing = latest.get('plugins', {}).get('billing', {})
+            for ctx in billing.get('contexts', []):
+                ctx_name = ctx.get('context_name', 'unknown')
+                contexts_seen.add(ctx_name)
+                gpus = ctx.get('gpus', {})
+                total_gpus += gpus.get('total', 0)
+                for gpu_type, counts in gpus.get('by_type', {}).items():
+                    gpus_by_type[gpu_type] += counts.get('total', 0)
+                nodes = ctx.get('nodes', {})
+                total_nodes += nodes.get('total', 0)
+                nodes_ready += nodes.get('ready', 0)
+                total_clusters += ctx.get('skypilot_clusters', 0)
+                total_pods += ctx.get('skypilot_pods', 0)
+
+        return {
+            'num_servers': len(servers),
+            'num_contexts': len(contexts_seen),
+            'total_gpus': total_gpus,
+            'gpus_by_type': dict(gpus_by_type),
+            'total_nodes': total_nodes,
+            'nodes_ready': nodes_ready,
+            'total_clusters': total_clusters,
+            'total_pods': total_pods,
+        }
+
+    def kueue_queue_health_timeseries(
+            self, heartbeats: List[dict]
+    ) -> List[Dict[str, Any]]:
+        """Build per-heartbeat queue admitted/pending time series.
+
+        Returns list of records:
+            {timestamp, context, queue, admitted_workloads,
+             num_pending_workloads}
+        """
+        records = []
+        for hb in heartbeats:
+            ts = _ns_to_datetime(hb.get('send_time', 0))
+            kueue = hb.get('plugins', {}).get('kueue', {})
+            for ctx in kueue.get('contexts', []):
+                ctx_name = ctx.get('context', 'unknown')
+                if not ctx.get('kueue_enabled', True):
+                    continue
+                for queue in ctx.get('cluster_queues', []):
+                    records.append({
+                        'timestamp': ts,
+                        'context': ctx_name,
+                        'queue': queue.get('name', 'unknown'),
+                        'admitted_workloads':
+                            queue.get('admitted_workloads', 0),
+                        'num_pending_workloads':
+                            queue.get('num_pending_workloads',
+                                      queue.get('pending_workloads', 0)),
+                    })
+        return records
+
+    def kueue_queue_health_stats(
+        self, heartbeats: List[dict]
+    ) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Compute per-context, per-queue queue health stats.
+
+        Returns:
+            {context: {queue: {admitted_avg, admitted_max,
+                               pending_avg, pending_max,
+                               preempted_total}}}
+        """
+        records = self.kueue_queue_health_timeseries(heartbeats)
+
+        groups: Dict[Tuple[str, str],
+                      List[Dict[str, Any]]] = defaultdict(list)
+        for r in records:
+            groups[(r['context'], r['queue'])].append(r)
+
+        # Gather preempted_events per context from raw heartbeats
+        preempted: Dict[str, int] = defaultdict(int)
+        for hb in heartbeats:
+            kueue = hb.get('plugins', {}).get('kueue', {})
+            for ctx in kueue.get('contexts', []):
+                ctx_name = ctx.get('context', 'unknown')
+                preempted[ctx_name] += ctx.get('preempted_events', 0)
+
+        stats: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
+        for (ctx, queue), recs in groups.items():
+            admitted = [r['admitted_workloads'] for r in recs]
+            pending = [r['num_pending_workloads'] for r in recs]
+            stats[ctx][queue] = {
+                'admitted_avg':
+                    sum(admitted) / len(admitted) if admitted else 0,
+                'admitted_max': max(admitted) if admitted else 0,
+                'pending_avg':
+                    sum(pending) / len(pending) if pending else 0,
+                'pending_max': max(pending) if pending else 0,
+                'preempted_total': preempted.get(ctx, 0),
+            }
+        return dict(stats)
+
+    def gpu_hours_stats(
+        self, heartbeats: List[dict]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Compute per-context GPU-hours (total, allocated, idle).
+
+        Uses interval_seconds from each heartbeat to compute hours.
+
+        Returns:
+            {context: {total_gpu_hours, allocated_gpu_hours,
+                       idle_gpu_hours, idle_pct,
+                       by_type: {gpu_type: {total_hrs, alloc_hrs,
+                                            idle_hrs}}}}
+        """
+        # Accumulate per context, per gpu_type
+        ctx_type_data: Dict[str, Dict[str, Dict[str, float]]] = \
+            defaultdict(lambda: defaultdict(
+                lambda: {'total_hrs': 0.0, 'alloc_hrs': 0.0}))
+
+        for hb in heartbeats:
+            interval_hrs = hb.get('interval_seconds', 600) / 3600.0
+            billing = hb.get('plugins', {}).get('billing', {})
+            for ctx in billing.get('contexts', []):
+                ctx_name = ctx.get('context_name', 'unknown')
+                for gpu_type, counts in ctx.get(
+                        'gpus', {}).get('by_type', {}).items():
+                    total = counts.get('total', 0)
+                    allocated = counts.get('allocated', 0)
+                    ctx_type_data[ctx_name][gpu_type][
+                        'total_hrs'] += total * interval_hrs
+                    ctx_type_data[ctx_name][gpu_type][
+                        'alloc_hrs'] += allocated * interval_hrs
+
+        stats: Dict[str, Dict[str, Any]] = {}
+        for ctx_name, gpu_types in ctx_type_data.items():
+            total_hrs = sum(v['total_hrs'] for v in gpu_types.values())
+            alloc_hrs = sum(v['alloc_hrs'] for v in gpu_types.values())
+            idle_hrs = total_hrs - alloc_hrs
+            idle_pct = (idle_hrs / total_hrs * 100) if total_hrs > 0 else 0
+
+            by_type = {}
+            for gpu_type, vals in gpu_types.items():
+                t = vals['total_hrs']
+                a = vals['alloc_hrs']
+                by_type[gpu_type] = {
+                    'total_hrs': t,
+                    'alloc_hrs': a,
+                    'idle_hrs': t - a,
+                }
+
+            stats[ctx_name] = {
+                'total_gpu_hours': total_hrs,
+                'allocated_gpu_hours': alloc_hrs,
+                'idle_gpu_hours': idle_hrs,
+                'idle_pct': idle_pct,
+                'by_type': by_type,
+            }
+        return stats
+
     def kueue_borrowing_timeseries(
             self, heartbeats: List[dict]
     ) -> List[Dict[str, Any]]:
@@ -594,6 +769,96 @@ def plot_gpu_utilization_heatmap(analyzer: HeartbeatAnalyzer,
     print(f'  {os.path.basename(output_path)}')
 
 
+def plot_fleet_overview(analyzer: HeartbeatAnalyzer,
+                        servers: Dict[str, dict],
+                        output_path: str):
+    """Plot fleet GPU composition as horizontal bar chart by GPU type."""
+    overview = analyzer.fleet_overview(servers)
+    gpus_by_type = overview.get('gpus_by_type', {})
+    if not gpus_by_type:
+        print('  No GPU data for fleet overview plot.')
+        return
+
+    gpu_types = sorted(gpus_by_type.keys(),
+                       key=lambda g: gpus_by_type[g], reverse=True)
+    counts = [gpus_by_type[g] for g in gpu_types]
+
+    fig, ax = plt.subplots(figsize=(10, max(3, len(gpu_types) * 0.6)))
+    bars = ax.barh(gpu_types, counts, color='steelblue', edgecolor='white')
+
+    for bar, count in zip(bars, counts):
+        ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
+                str(count), va='center', fontsize=10)
+
+    ax.set_xlabel('Total GPUs')
+    ax.set_title(f'Fleet GPU Composition '
+                 f'({overview["num_servers"]} servers, '
+                 f'{overview["num_contexts"]} contexts)')
+    ax.invert_yaxis()
+    ax.grid(True, alpha=0.3, axis='x')
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'  {os.path.basename(output_path)}')
+
+
+def plot_kueue_queue_health(analyzer: HeartbeatAnalyzer,
+                             heartbeats: List[dict],
+                             output_path: str) -> bool:
+    """Plot queue admitted vs pending workloads over time.
+
+    One subplot per context that has kueue enabled.
+    Returns False if no kueue data.
+    """
+    records = analyzer.kueue_queue_health_timeseries(heartbeats)
+    if not records:
+        return False
+
+    # Group by context -> queue
+    ctx_queue: Dict[str, Dict[str, Dict[str, list]]] = defaultdict(
+        lambda: defaultdict(
+            lambda: {'ts': [], 'admitted': [], 'pending': []}))
+    for r in records:
+        entry = ctx_queue[r['context']][r['queue']]
+        entry['ts'].append(r['timestamp'])
+        entry['admitted'].append(r['admitted_workloads'])
+        entry['pending'].append(r['num_pending_workloads'])
+
+    contexts = sorted(ctx_queue.keys())
+    if not contexts:
+        return False
+
+    n = len(contexts)
+    fig, axes = plt.subplots(n, 1, figsize=(14, 4 * n),
+                             squeeze=False, sharex=False)
+
+    for i, ctx in enumerate(contexts):
+        ax = axes[i, 0]
+        queues = ctx_queue[ctx]
+        for queue_name, vals in sorted(queues.items()):
+            ax.fill_between(vals['ts'], vals['admitted'],
+                            alpha=0.4, color='green',
+                            label=f'{queue_name} admitted')
+            ax.fill_between(vals['ts'], vals['pending'],
+                            alpha=0.4, color='orange',
+                            label=f'{queue_name} pending')
+
+        ax.set_title(f'Queue Health: {ctx}')
+        ax.set_ylabel('Workloads')
+        ax.legend(fontsize=8, loc='upper right')
+        ax.grid(True, alpha=0.3)
+        ax.xaxis.set_major_formatter(
+            mdates.DateFormatter('%m-%d %H:%M'))
+        fig.autofmt_xdate()
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'  {os.path.basename(output_path)}')
+    return True
+
+
 # ── CSV Output ────────────────────────────────────────────────────────
 
 def write_gpu_allocation_csv(analyzer: HeartbeatAnalyzer,
@@ -651,6 +916,34 @@ def write_kueue_borrowing_csv(analyzer: HeartbeatAnalyzer,
     print(f'  {os.path.basename(path)}')
 
 
+def write_gpu_hours_csv(analyzer: HeartbeatAnalyzer,
+                         servers: Dict[str, dict],
+                         output_path: str):
+    """Write GPU-hours breakdown per context per GPU type to CSV."""
+    path = output_path.replace('.csv', '_gpu_hours.csv')
+    with open(path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'server_hash', 'hostname', 'context', 'gpu_type',
+            'total_gpu_hours', 'allocated_gpu_hours', 'idle_gpu_hours'
+        ])
+        for sh, info in servers.items():
+            stats = analyzer.gpu_hours_stats(info['heartbeats'])
+            for ctx_name, ctx_stats in sorted(stats.items()):
+                for gpu_type, type_stats in sorted(
+                        ctx_stats['by_type'].items()):
+                    writer.writerow([
+                        sh,
+                        info['hostname'],
+                        ctx_name,
+                        gpu_type,
+                        f'{type_stats["total_hrs"]:.2f}',
+                        f'{type_stats["alloc_hrs"]:.2f}',
+                        f'{type_stats["idle_hrs"]:.2f}',
+                    ])
+    print(f'  {os.path.basename(path)}')
+
+
 # ── CLI ───────────────────────────────────────────────────────────────
 
 def parse_gpu_prices(s: str) -> Dict[str, float]:
@@ -663,6 +956,12 @@ def parse_gpu_prices(s: str) -> Dict[str, float]:
         k, v = pair.split('=', 1)
         prices[k.strip()] = float(v.strip())
     return prices
+
+
+def _sanitize_dirname(name: str) -> str:
+    """Sanitize a string for use as a directory name."""
+    return name.replace('/', '_').replace('\\', '_').replace(
+        ':', '_').replace(' ', '_')
 
 
 def print_report(analyzer: HeartbeatAnalyzer,
@@ -691,6 +990,23 @@ def print_report(analyzer: HeartbeatAnalyzer,
     print(f'Range: {range_display}')
     print(f'Total heartbeats: {total_hbs}')
 
+    # Fleet Overview
+    overview = analyzer.fleet_overview(servers)
+    print(f'\n=== Fleet Overview ===')
+    print(f'Servers: {overview["num_servers"]}')
+    print(f'Contexts: {overview["num_contexts"]} '
+          f'(across {overview["num_servers"]} servers)')
+    gpu_parts = ', '.join(
+        f'{g}: {c}' for g, c in sorted(
+            overview['gpus_by_type'].items(),
+            key=lambda x: x[1], reverse=True))
+    print(f'Total GPUs: {overview["total_gpus"]}'
+          + (f' ({gpu_parts})' if gpu_parts else ''))
+    print(f'Total Nodes: {overview["total_nodes"]} '
+          f'({overview["nodes_ready"]} ready)')
+    print(f'Total SkyPilot Clusters: {overview["total_clusters"]}')
+    print(f'Total SkyPilot Pods: {overview["total_pods"]}')
+
     for sh, info in sorted(servers.items()):
         hbs = info['heartbeats']
         hostname = info['hostname']
@@ -716,6 +1032,27 @@ def print_report(analyzer: HeartbeatAnalyzer,
                              f'{s["allocated_max"]}')
                 print(f'      {ctx:<25s} {s["total_gpus"]:<13d} '
                       f'{alloc_str:<28s} {s["util_pct_avg"]:.1f}%')
+        else:
+            print(f'      (no GPU data)')
+
+        # GPU-Hours Summary
+        gpu_hrs = analyzer.gpu_hours_stats(hbs)
+        print(f'\n    GPU-Hours Summary:')
+        if gpu_hrs:
+            print(f'      {"Context":<25s} {"Total GPU-Hrs":<16s} '
+                  f'{"Allocated GPU-Hrs":<20s} '
+                  f'{"Idle GPU-Hrs":<15s} {"Idle%"}')
+            for ctx, s in sorted(gpu_hrs.items()):
+                print(f'      {ctx:<25s} '
+                      f'{s["total_gpu_hours"]:<16.1f} '
+                      f'{s["allocated_gpu_hours"]:<20.1f} '
+                      f'{s["idle_gpu_hours"]:<15.1f} '
+                      f'{s["idle_pct"]:.1f}%')
+                for gpu_type, ts in sorted(s['by_type'].items()):
+                    print(f'        {gpu_type:<23s} '
+                          f'{ts["total_hrs"]:<16.1f} '
+                          f'{ts["alloc_hrs"]:<20.1f} '
+                          f'{ts["idle_hrs"]:<15.1f}')
         else:
             print(f'      (no GPU data)')
 
@@ -752,6 +1089,28 @@ def print_report(analyzer: HeartbeatAnalyzer,
 
         print(f'\n    Total Borrowed GPU-Hours: {total_gpu_hrs:.1f}')
         print(f'    Estimated ROI: ${total_roi:.2f}')
+
+        # Kueue Queue Health
+        qh_stats = analyzer.kueue_queue_health_stats(hbs)
+        has_queues = any(
+            bool(queues) for queues in qh_stats.values())
+        print(f'\n    Kueue Queue Health:')
+        if has_queues:
+            print(f'      {"Context":<25s} {"Queue":<18s} '
+                  f'{"Admitted (avg/max)":<22s} '
+                  f'{"Pending (avg/max)":<20s} {"Preemptions"}')
+            for ctx, queues in sorted(qh_stats.items()):
+                for queue, s in sorted(queues.items()):
+                    admitted_str = (f'{s["admitted_avg"]:.1f} / '
+                                    f'{s["admitted_max"]}')
+                    pending_str = (f'{s["pending_avg"]:.1f} / '
+                                   f'{s["pending_max"]}')
+                    print(f'      {ctx:<25s} {queue:<18s} '
+                          f'{admitted_str:<22s} '
+                          f'{pending_str:<20s} '
+                          f'{s["preempted_total"]}')
+        else:
+            print(f'      (no queue data)')
 
 
 def main():
@@ -812,29 +1171,49 @@ def main():
             os.makedirs(args.plot_dir, exist_ok=True)
             print(f'\nPlots saved to: {args.plot_dir}/')
 
-            all_hbs = [hb for info in servers.values()
-                       for hb in info['heartbeats']]
+            # Fleet-level plot at top level
+            plot_fleet_overview(
+                analyzer, servers,
+                os.path.join(args.plot_dir, 'fleet_overview.png'))
 
-            plot_gpu_allocation(
-                analyzer, all_hbs,
-                os.path.join(args.plot_dir, 'gpu_allocation.png'))
+            # Per-server subdirectories
+            for sh, info in sorted(servers.items()):
+                hostname = _sanitize_dirname(info['hostname'])
+                subdir = os.path.join(args.plot_dir,
+                                      f'{sh}_{hostname}')
+                os.makedirs(subdir, exist_ok=True)
+                hbs = info['heartbeats']
 
-            ok = plot_kueue_borrowing(
-                analyzer, all_hbs,
-                os.path.join(args.plot_dir, 'kueue_borrowing.png'))
-            if not ok:
-                print('  kueue_borrowing.png  '
-                      '(skipped - no borrowing data)')
+                print(f'  {sh}_{hostname}/')
 
-            plot_gpu_utilization_heatmap(
-                analyzer, all_hbs,
-                os.path.join(args.plot_dir, 'gpu_utilization.png'))
+                plot_gpu_allocation(
+                    analyzer, hbs,
+                    os.path.join(subdir, 'gpu_allocation.png'))
+
+                ok = plot_kueue_borrowing(
+                    analyzer, hbs,
+                    os.path.join(subdir, 'kueue_borrowing.png'))
+                if not ok:
+                    print('    kueue_borrowing.png  '
+                          '(skipped - no borrowing data)')
+
+                plot_gpu_utilization_heatmap(
+                    analyzer, hbs,
+                    os.path.join(subdir, 'gpu_utilization.png'))
+
+                ok = plot_kueue_queue_health(
+                    analyzer, hbs,
+                    os.path.join(subdir, 'kueue_queue_health.png'))
+                if not ok:
+                    print('    kueue_queue_health.png  '
+                          '(skipped - no queue data)')
 
     # CSV
     if args.csv_output:
         print(f'\nCSVs saved to:')
         write_gpu_allocation_csv(analyzer, servers, args.csv_output)
         write_kueue_borrowing_csv(analyzer, servers, args.csv_output)
+        write_gpu_hours_csv(analyzer, servers, args.csv_output)
 
     print()
 
