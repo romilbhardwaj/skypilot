@@ -1120,7 +1120,14 @@ def print_report(analyzer: HeartbeatAnalyzer,
         else:
             print(f'      (no borrowing in period)')
 
-        print(f'\n    Total Borrowed GPU-Hours: {total_gpu_hrs:.1f}')
+        # Server summary totals
+        total_alloc_hrs = sum(
+            s['allocated_gpu_hours'] for s in gpu_hrs.values())
+        total_idle_hrs = sum(
+            s['idle_gpu_hours'] for s in gpu_hrs.values())
+        print(f'\n    Total Allocated GPU-Hours: {total_alloc_hrs:.1f}')
+        print(f'    Total Idle GPU-Hours: {total_idle_hrs:.1f}')
+        print(f'    Total Borrowed GPU-Hours: {total_gpu_hrs:.1f}')
         print(f'    Estimated ROI: ${total_roi:.2f}')
 
         # Kueue Queue Health
@@ -1144,14 +1151,6 @@ def print_report(analyzer: HeartbeatAnalyzer,
                           f'{s["preempted_total"]}')
         else:
             print(f'      (no queue data)')
-
-        # Server summary totals
-        total_alloc_hrs = sum(
-            s['allocated_gpu_hours'] for s in gpu_hrs.values())
-        total_idle_hrs = sum(
-            s['idle_gpu_hours'] for s in gpu_hrs.values())
-        print(f'\n    Total Allocated GPU-Hours: {total_alloc_hrs:.1f}')
-        print(f'    Total Idle GPU-Hours: {total_idle_hrs:.1f}')
 
 
 def main():
