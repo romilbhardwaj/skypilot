@@ -1,0 +1,2085 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_LOKI",
+      "label": "Loki",
+      "description": "Loki datasource for server heartbeat logs",
+      "type": "datasource",
+      "pluginId": "loki",
+      "pluginName": "Loki"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "9.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "loki",
+      "name": "Loki",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "gauge",
+      "name": "Gauge",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "logs",
+      "name": "Logs",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "Per-server view of GPU allocation, utilization, Kueue queue health, and borrowed GPUs from heartbeat telemetry.\n\nLimitations:\n1. Supports up to 8 K8s contexts per server (indices 0-7)\n2. Supports up to 3 cluster queues per context (indices 0-2)\n3. Per-GPU-type breakdown not available (dynamic keys can't be iterated in LogQL)\n4. Borrowed GPUs assumes nvidia.com/gpu is at resources index 2 (cpu=0, memory=1, gpu=2)\n5. For precise GPU-hours and ROI calculations, use analyze_heartbeat_roi.py",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Server Info & Snapshot",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "{type=\"server_heartbeat\"} | json server_hash=\"server_hash\" | server_hash=\"$server_hash\"",
+          "maxLines": 1,
+          "refId": "A"
+        }
+      ],
+      "title": "Latest Heartbeat",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx0",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx1",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx2",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx3",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx4",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx5",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx6",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx7",
+          "refId": "H"
+        }
+      ],
+      "title": "Total GPUs",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "alias": "Total GPUs"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Total GPUs"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx0",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx1",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx2",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx3",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx4",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx5",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx6",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].nodes.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx7",
+          "refId": "H"
+        }
+      ],
+      "title": "Total Nodes",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "alias": "Total Nodes"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Total Nodes"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx0",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx1",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx2",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx3",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx4",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx5",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx6",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].skypilot_clusters\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx7",
+          "refId": "H"
+        }
+      ],
+      "title": "SkyPilot Clusters",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "alias": "SkyPilot Clusters"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "SkyPilot Clusters"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx0",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx1",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx2",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx3",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx4",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx5",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx6",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].skypilot_pods\" | server_hash=\"$server_hash\" | unwrap val [$__range]))",
+          "legendFormat": "ctx7",
+          "refId": "H"
+        }
+      ],
+      "title": "SkyPilot Pods",
+      "transformations": [
+        {
+          "id": "reduce",
+          "options": {
+            "reducers": [
+              "lastNotNull"
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "alias": "SkyPilot Pods"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "SkyPilot Pods"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 7,
+      "title": "GPU Allocation",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.3
+              },
+              {
+                "color": "green",
+                "value": 0.6
+              },
+              {
+                "color": "dark-green",
+                "value": 0.9
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range]))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))",
+          "legendFormat": "Allocated",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range]))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))\n+ (sum(last_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__range])) or vector(0))",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ],
+      "title": "GPU Utilization %",
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "Allocated",
+              "operator": "/",
+              "right": "Total"
+            },
+            "alias": "GPU Utilization"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "GPU Utilization"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "GPUs",
+            "axisPlacement": "auto",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total GPUs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Allocated GPUs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 6
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx0",
+          "refId": "T0"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[0].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx0",
+          "refId": "A0"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx1",
+          "refId": "T1"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[1].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx1",
+          "refId": "A1"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx2",
+          "refId": "T2"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[2].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx2",
+          "refId": "A2"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx3",
+          "refId": "T3"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[3].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx3",
+          "refId": "A3"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx4",
+          "refId": "T4"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[4].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx4",
+          "refId": "A4"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx5",
+          "refId": "T5"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[5].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx5",
+          "refId": "A5"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx6",
+          "refId": "T6"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[6].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx6",
+          "refId": "A6"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].gpus.total\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "total_ctx7",
+          "refId": "T7"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.billing.contexts[7].gpus.allocated\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "alloc_ctx7",
+          "refId": "A7"
+        }
+      ],
+      "title": "Total vs Allocated GPUs",
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum",
+              "include": [
+                "total_ctx0",
+                "total_ctx1",
+                "total_ctx2",
+                "total_ctx3",
+                "total_ctx4",
+                "total_ctx5",
+                "total_ctx6",
+                "total_ctx7"
+              ]
+            },
+            "alias": "Total GPUs",
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum",
+              "include": [
+                "alloc_ctx0",
+                "alloc_ctx1",
+                "alloc_ctx2",
+                "alloc_ctx3",
+                "alloc_ctx4",
+                "alloc_ctx5",
+                "alloc_ctx6",
+                "alloc_ctx7"
+              ]
+            },
+            "alias": "Allocated GPUs",
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "Time",
+                "Total GPUs",
+                "Allocated GPUs"
+              ]
+            }
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 10,
+      "title": "Kueue Queue Health",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Workloads",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Admitted.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/Pending.*/"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx0/q0",
+          "refId": "A00"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx0/q0",
+          "refId": "P00"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx0/q1",
+          "refId": "A01"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx0/q1",
+          "refId": "P01"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx0/q2",
+          "refId": "A02"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx0/q2",
+          "refId": "P02"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx1/q0",
+          "refId": "A10"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx1/q0",
+          "refId": "P10"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx1/q1",
+          "refId": "A11"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx1/q1",
+          "refId": "P11"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx1/q2",
+          "refId": "A12"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx1/q2",
+          "refId": "P12"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx2/q0",
+          "refId": "A20"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx2/q0",
+          "refId": "P20"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx2/q1",
+          "refId": "A21"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx2/q1",
+          "refId": "P21"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx2/q2",
+          "refId": "A22"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx2/q2",
+          "refId": "P22"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx3/q0",
+          "refId": "A30"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx3/q0",
+          "refId": "P30"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx3/q1",
+          "refId": "A31"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx3/q1",
+          "refId": "P31"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx3/q2",
+          "refId": "A32"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx3/q2",
+          "refId": "P32"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx4/q0",
+          "refId": "A40"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx4/q0",
+          "refId": "P40"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx4/q1",
+          "refId": "A41"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx4/q1",
+          "refId": "P41"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx4/q2",
+          "refId": "A42"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx4/q2",
+          "refId": "P42"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx5/q0",
+          "refId": "A50"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx5/q0",
+          "refId": "P50"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx5/q1",
+          "refId": "A51"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx5/q1",
+          "refId": "P51"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx5/q2",
+          "refId": "A52"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx5/q2",
+          "refId": "P52"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx6/q0",
+          "refId": "A60"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx6/q0",
+          "refId": "P60"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx6/q1",
+          "refId": "A61"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx6/q1",
+          "refId": "P61"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx6/q2",
+          "refId": "A62"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx6/q2",
+          "refId": "P62"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[0].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx7/q0",
+          "refId": "A70"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[0].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx7/q0",
+          "refId": "P70"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[1].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx7/q1",
+          "refId": "A71"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[1].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx7/q1",
+          "refId": "P71"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[2].admitted_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Admitted ctx7/q2",
+          "refId": "A72"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[2].num_pending_workloads\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Pending ctx7/q2",
+          "refId": "P72"
+        }
+      ],
+      "title": "Admitted vs Pending Workloads",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 12,
+      "title": "Borrowed GPUs",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Borrowed GPUs",
+            "axisPlacement": "auto",
+            "fillOpacity": 15,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx0/q0",
+          "refId": "B00"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx0/q1",
+          "refId": "B01"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[0].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx0/q2",
+          "refId": "B02"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx1/q0",
+          "refId": "B10"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx1/q1",
+          "refId": "B11"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[1].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx1/q2",
+          "refId": "B12"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx2/q0",
+          "refId": "B20"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx2/q1",
+          "refId": "B21"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[2].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx2/q2",
+          "refId": "B22"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx3/q0",
+          "refId": "B30"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx3/q1",
+          "refId": "B31"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[3].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx3/q2",
+          "refId": "B32"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx4/q0",
+          "refId": "B40"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx4/q1",
+          "refId": "B41"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[4].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx4/q2",
+          "refId": "B42"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx5/q0",
+          "refId": "B50"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx5/q1",
+          "refId": "B51"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[5].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx5/q2",
+          "refId": "B52"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx6/q0",
+          "refId": "B60"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx6/q1",
+          "refId": "B61"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[6].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx6/q2",
+          "refId": "B62"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[0].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx7/q0",
+          "refId": "B70"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[1].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx7/q1",
+          "refId": "B71"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "sum(avg_over_time({type=\"server_heartbeat\"} | json server_hash=\"server_hash\", val=\"plugins.kueue.contexts[7].cluster_queues[2].flavors_reservation[0].resources[2].borrowed\" | server_hash=\"$server_hash\" | unwrap val [$__auto]))",
+          "legendFormat": "Borrowed ctx7/q2",
+          "refId": "B72"
+        }
+      ],
+      "title": "Borrowed GPUs over Time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "id": 14,
+      "title": "Raw Logs",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOKI}"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "id": 15,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "{type=\"server_heartbeat\"} | json server_hash=\"server_hash\" | server_hash=\"$server_hash\"",
+          "maxLines": 50,
+          "refId": "A"
+        }
+      ],
+      "title": "Heartbeat Logs",
+      "type": "logs"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "skypilot",
+    "heartbeat",
+    "gpu",
+    "kueue"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allowCustomValue": true,
+        "current": {
+          "selected": true,
+          "text": "CustomerA (7d420045)",
+          "value": "7d420045"
+        },
+        "description": "Server hash to filter heartbeat data. Select a known server or type a custom hash.",
+        "hide": 0,
+        "label": "Server Hash",
+        "name": "server_hash",
+        "options": [
+          {
+            "selected": true,
+            "text": "CustomerA (7d420045)",
+            "value": "7d420045"
+          },
+          {
+            "selected": false,
+            "text": "CustomerB (abc12345)",
+            "value": "abc12345"
+          },
+          {
+            "selected": false,
+            "text": "CustomerC (def67890)",
+            "value": "def67890"
+          }
+        ],
+        "query": "CustomerA (7d420045) : 7d420045, CustomerB (abc12345) : abc12345, CustomerC (def67890) : def67890",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "SkyPilot Heartbeat - Per Server",
+  "uid": "skypilot-heartbeat-per-server",
+  "version": 1
+}
