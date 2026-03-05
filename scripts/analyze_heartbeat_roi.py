@@ -499,8 +499,7 @@ class HeartbeatAnalyzer:
         """Compute per-context GPU-hours (total, allocated, idle).
 
         Uses actual elapsed time between heartbeats to handle missed
-        heartbeats correctly. Caps at 2x interval_seconds to avoid
-        inflating during long outages.
+        heartbeats correctly.
 
         Returns:
             {context: {total_gpu_hours, allocated_gpu_hours,
