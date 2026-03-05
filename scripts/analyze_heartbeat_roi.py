@@ -35,6 +35,10 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 
+# Hostnames containing any of these substrings (case-insensitive) are excluded.
+EXCLUDED_HOSTNAME_SUBSTRINGS = ['buildkite']
+
+
 class GPUPriceTable:
     """GPU pricing for ROI calculations."""
 
@@ -150,6 +154,13 @@ class LokiClient:
             if key not in seen:
                 seen.add(key)
                 unique.append(hb)
+
+        # Filter out excluded hostnames (e.g. CI servers)
+        unique = [
+            hb for hb in unique
+            if not any(sub in hb.get('hostname', '').lower()
+                       for sub in EXCLUDED_HOSTNAME_SUBSTRINGS)
+        ]
 
         # Filter by server_hash if specified
         if server_hash:
@@ -456,12 +467,40 @@ class HeartbeatAnalyzer:
             }
         return dict(stats)
 
+    @staticmethod
+    def _elapsed_hours(heartbeats: List[dict]) -> Dict[int, float]:
+        """Compute elapsed hours each heartbeat represents.
+
+        Uses actual time gaps between consecutive heartbeats (by
+        send_time) so that missed heartbeats don't undercount.
+
+        For the first heartbeat, falls back to interval_seconds.
+
+        Returns:
+            {id(hb): elapsed_hours} for each heartbeat.
+        """
+        sorted_hbs = sorted(heartbeats,
+                            key=lambda h: h.get('send_time', 0))
+        result: Dict[int, float] = {}
+        for i, hb in enumerate(sorted_hbs):
+            if i == 0:
+                elapsed_s = hb.get('interval_seconds', 600)
+            else:
+                prev_ts = sorted_hbs[i - 1].get('send_time', 0)
+                cur_ts = hb.get('send_time', 0)
+                # send_time is in nanoseconds
+                elapsed_s = (cur_ts - prev_ts) / 1e9
+            result[id(hb)] = elapsed_s / 3600.0
+        return result
+
     def gpu_hours_stats(
         self, heartbeats: List[dict]
     ) -> Dict[str, Dict[str, Any]]:
         """Compute per-context GPU-hours (total, allocated, idle).
 
-        Uses interval_seconds from each heartbeat to compute hours.
+        Uses actual elapsed time between heartbeats to handle missed
+        heartbeats correctly. Caps at 2x interval_seconds to avoid
+        inflating during long outages.
 
         Returns:
             {context: {total_gpu_hours, allocated_gpu_hours,
@@ -469,13 +508,15 @@ class HeartbeatAnalyzer:
                        by_type: {gpu_type: {total_hrs, alloc_hrs,
                                             idle_hrs}}}}
         """
+        elapsed = self._elapsed_hours(heartbeats)
+
         # Accumulate per context, per gpu_type
         ctx_type_data: Dict[str, Dict[str, Dict[str, float]]] = \
             defaultdict(lambda: defaultdict(
                 lambda: {'total_hrs': 0.0, 'alloc_hrs': 0.0}))
 
         for hb in heartbeats:
-            interval_hrs = hb.get('interval_seconds', 600) / 3600.0
+            interval_hrs = elapsed[id(hb)]
             billing = hb.get('plugins', {}).get('billing', {})
             for ctx in billing.get('contexts', []):
                 ctx_name = ctx.get('context_name', 'unknown')
@@ -519,15 +560,19 @@ class HeartbeatAnalyzer:
     ) -> List[Dict[str, Any]]:
         """Build Kueue borrowing time series.
 
+        Uses actual elapsed time between heartbeats for accurate
+        GPU-hours and ROI when heartbeats are missed.
+
         Returns list of records:
             {timestamp, context, queue, borrowed_gpus, gpu_type, roi_value}
         """
         ctx_gpu_types = self._context_gpu_types(heartbeats)
+        elapsed = self._elapsed_hours(heartbeats)
         records = []
 
         for hb in heartbeats:
             ts = _ns_to_datetime(hb.get('send_time', 0))
-            interval = hb.get('interval_seconds', 600)
+            interval_hrs = elapsed[id(hb)]
             kueue = hb.get('plugins', {}).get('kueue', {})
 
             for ctx in kueue.get('contexts', []):
@@ -546,7 +591,7 @@ class HeartbeatAnalyzer:
                                     res.get('borrowed', '0'))
 
                     roi = (borrowed * price *
-                           (interval / 3600)) if borrowed > 0 else 0
+                           interval_hrs) if borrowed > 0 else 0
 
                     records.append({
                         'timestamp': ts,
@@ -1088,20 +1133,22 @@ def print_report(analyzer: HeartbeatAnalyzer,
         gpu_stats = analyzer.gpu_allocation_stats(hbs)
         print(f'\n    GPU Allocation:')
         if gpu_stats:
-            print(f'      {"Context":<25s} {"Total GPUs":<13s} '
+            cw = max(len('Context'),
+                     max(len(c) for c in gpu_stats)) + 2
+            print(f'      {"Context":<{cw}s} {"Total GPUs":<13s} '
                   f'{"Allocated (avg/min/max)":<28s} {"Util% (avg)"}')
             for ctx, s in sorted(gpu_stats.items()):
                 alloc_str = (f'{s["allocated_avg"]:.1f} / '
                              f'{s["allocated_min"]} / '
                              f'{s["allocated_max"]}')
-                print(f'      {ctx:<25s} {s["total_gpus"]:<13d} '
+                print(f'      {ctx:<{cw}s} {s["total_gpus"]:<13d} '
                       f'{alloc_str:<28s} {s["util_pct_avg"]:.1f}%')
                 for gpu_type, ts in sorted(
                         s.get('by_type', {}).items()):
                     t_alloc_str = (f'{ts["alloc_avg"]:.1f} / '
                                    f'{ts["alloc_min"]} / '
                                    f'{ts["alloc_max"]}')
-                    print(f'        {gpu_type:<23s} '
+                    print(f'        {gpu_type:<{cw - 2}s} '
                           f'{ts["total"]:<13d} '
                           f'{t_alloc_str:<28s} '
                           f'{ts["util_pct_avg"]:.1f}%')
@@ -1112,17 +1159,19 @@ def print_report(analyzer: HeartbeatAnalyzer,
         gpu_hrs = analyzer.gpu_hours_stats(hbs)
         print(f'\n    GPU-Hours Summary:')
         if gpu_hrs:
-            print(f'      {"Context":<25s} {"Total GPU-Hrs":<16s} '
+            cw = max(len('Context'),
+                     max(len(c) for c in gpu_hrs)) + 2
+            print(f'      {"Context":<{cw}s} {"Total GPU-Hrs":<16s} '
                   f'{"Allocated GPU-Hrs":<20s} '
                   f'{"Idle GPU-Hrs":<15s} {"Idle%"}')
             for ctx, s in sorted(gpu_hrs.items()):
-                print(f'      {ctx:<25s} '
+                print(f'      {ctx:<{cw}s} '
                       f'{s["total_gpu_hours"]:<16.1f} '
                       f'{s["allocated_gpu_hours"]:<20.1f} '
                       f'{s["idle_gpu_hours"]:<15.1f} '
                       f'{s["idle_pct"]:.1f}%')
                 for gpu_type, ts in sorted(s['by_type'].items()):
-                    print(f'        {gpu_type:<23s} '
+                    print(f'        {gpu_type:<{cw - 2}s} '
                           f'{ts["total_hrs"]:<16.1f} '
                           f'{ts["alloc_hrs"]:<20.1f} '
                           f'{ts["idle_hrs"]:<15.1f}')
@@ -1140,7 +1189,14 @@ def print_report(analyzer: HeartbeatAnalyzer,
         total_roi = 0.0
 
         if has_borrowing:
-            print(f'      {"Context":<25s} {"Queue":<18s} '
+            all_ctxs = list(kueue_stats.keys())
+            all_queues = [q for qs in kueue_stats.values()
+                          for q in qs.keys()]
+            cw = max(len('Context'),
+                     max(len(c) for c in all_ctxs)) + 2
+            qw = max(len('Queue'),
+                     max(len(q) for q in all_queues)) + 2
+            print(f'      {"Context":<{cw}s} {"Queue":<{qw}s} '
                   f'{"Borrowed (avg/min/max)":<26s} '
                   f'{"GPU-Hrs":<10s} {"Value($)"}')
             for ctx, queues in sorted(kueue_stats.items()):
@@ -1153,14 +1209,15 @@ def print_report(analyzer: HeartbeatAnalyzer,
                     total_gpu_hrs += s['gpu_hours']
                     total_roi += s['roi_total']
                     print(
-                        f'      {ctx:<25s} {queue:<18s} '
+                        f'      {ctx:<{cw}s} {queue:<{qw}s} '
                         f'{borrow_str:<26s} '
                         f'{s["gpu_hours"]:<10.1f} '
                         f'${s["roi_total"]:.2f}')
                     for gtype, gstats in sorted(
                             s.get('by_type', {}).items()):
                         print(
-                            f'        {gtype:<23s} {"":18s} '
+                            f'        {gtype:<{cw - 2}s} '
+                            f'{"":>{qw}s} '
                             f'{"":26s} '
                             f'{gstats["gpu_hours"]:<10.1f} '
                             f'${gstats["roi"]:.2f}')
@@ -1187,7 +1244,16 @@ def print_report(analyzer: HeartbeatAnalyzer,
             bool(queues) for queues in qh_stats.values())
         print(f'\n    Kueue Queue Health:')
         if has_queues:
-            print(f'      {"Context":<25s} {"Queue":<18s} '
+            all_ctxs = list(qh_stats.keys())
+            all_queues = [q for qs in qh_stats.values()
+                          for q in qs.keys()]
+            cw = max(len('Context'),
+                     max((len(c) for c in all_ctxs),
+                         default=len('Context'))) + 2
+            qw = max(len('Queue'),
+                     max((len(q) for q in all_queues),
+                         default=len('Queue'))) + 2
+            print(f'      {"Context":<{cw}s} {"Queue":<{qw}s} '
                   f'{"Admitted (avg/max)":<22s} '
                   f'{"Pending (avg/max)":<20s} {"Preemptions"}')
             for ctx, queues in sorted(qh_stats.items()):
@@ -1196,7 +1262,7 @@ def print_report(analyzer: HeartbeatAnalyzer,
                                     f'{s["admitted_max"]}')
                     pending_str = (f'{s["pending_avg"]:.1f} / '
                                    f'{s["pending_max"]}')
-                    print(f'      {ctx:<25s} {queue:<18s} '
+                    print(f'      {ctx:<{cw}s} {queue:<{qw}s} '
                           f'{admitted_str:<22s} '
                           f'{pending_str:<20s} '
                           f'{s["preempted_total"]}')
