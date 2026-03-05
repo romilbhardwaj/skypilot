@@ -225,35 +225,35 @@
           "skypilot_pods": 6,
           "cluster_resources": [
             {
-              "name": "sky-0d64-seungjinyang-2dae7533",
+              "name": "sky-0d64-romilb-2dae7533",
               "pods": 1,
               "cpus": 2.0,
               "memory_gb": 2.0,
               "gpus": 0
             },
             {
-              "name": "sky-976a-seungjinyang-2dae7533",
+              "name": "sky-976a-romilb-2dae7533",
               "pods": 1,
               "cpus": 2.0,
               "memory_gb": 2.0,
               "gpus": 0
             },
             {
-              "name": "sky-ab1d-seungjinyang-2dae7533",
+              "name": "sky-ab1d-romilb-2dae7533",
               "pods": 1,
               "cpus": 2.0,
               "memory_gb": 2.0,
               "gpus": 0
             },
             {
-              "name": "sky-cbb9-seungjinyang-2dae7533",
+              "name": "sky-cbb9-romilb-2dae7533",
               "pods": 2,
               "cpus": 4.0,
               "memory_gb": 4.0,
               "gpus": 0
             },
             {
-              "name": "sky-dbaa-seungjinyang-2dae7533",
+              "name": "sky-dbaa-romilb-2dae7533",
               "pods": 1,
               "cpus": 2.0,
               "memory_gb": 2.0,
@@ -436,30 +436,30 @@
               ],
               "pending_workloads": [
                 {
-                  "cluster_name_on_cloud": "sky-0d64-seungjinyang-2dae7533",
+                  "cluster_name_on_cloud": "sky-0d64-romilb-2dae7533",
                   "position": 0,
-                  "pod_name": "sky-0d64-seungjinyang-2dae7533-head",
+                  "pod_name": "sky-0d64-romilb-2dae7533-head",
                   "priority": 0,
                   "num_pods": 1
                 },
                 {
-                  "cluster_name_on_cloud": "sky-ab1d-seungjinyang-2dae7533",
+                  "cluster_name_on_cloud": "sky-ab1d-romilb-2dae7533",
                   "position": 1,
-                  "pod_name": "sky-ab1d-seungjinyang-2dae7533-head",
+                  "pod_name": "sky-ab1d-romilb-2dae7533-head",
                   "priority": 0,
                   "num_pods": 1
                 },
                 {
-                  "cluster_name_on_cloud": "sky-dbaa-seungjinyang-2dae7533",
+                  "cluster_name_on_cloud": "sky-dbaa-romilb-2dae7533",
                   "position": 2,
-                  "pod_name": "sky-dbaa-seungjinyang-2dae7533-head",
+                  "pod_name": "sky-dbaa-romilb-2dae7533-head",
                   "priority": 0,
                   "num_pods": 1
                 },
                 {
-                  "cluster_name_on_cloud": "sky-cbb9-seungjinyang-2dae7533",
+                  "cluster_name_on_cloud": "sky-cbb9-romilb-2dae7533",
                   "position": 3,
-                  "pod_name": "sky-cbb9-seungjinyang-2dae7533-head",
+                  "pod_name": "sky-cbb9-romilb-2dae7533-head",
                   "priority": 0,
                   "num_pods": 2
                 }

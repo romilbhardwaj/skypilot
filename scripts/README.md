@@ -38,3 +38,55 @@ python scripts/inject_test_heartbeats.py \
 3. Select your Loki datasource when prompted
 
 The `server_hash` dropdown shows labeled entries (e.g., "CustomerA (7d420045)"). To update labels: **Dashboard Settings → Variables → server_hash → edit "Custom options"** — no JSON re-import needed. You can also type arbitrary hashes directly in the dropdown.
+
+## Example Output
+
+Running `analyze_heartbeat_roi.py` produces a report like:
+
+```
+=== SkyPilot Heartbeat ROI Report ===
+Range: 2026-02-25 00:00:00 to 2026-03-04 00:00:00 (7d)
+Total heartbeats: 2016
+
+=== Fleet Overview ===
+Servers: 2
+Contexts: 3 (across 2 servers)
+Total GPUs: 64 (H100: 48, A100: 16)
+Total Nodes: 10 (9 ready)
+Total SkyPilot Clusters: 5
+Total SkyPilot Pods: 12
+
+--- Server: 7d420045 (prod-host-1, release=skypilot) ---
+    SkyPilot version: 1.0.0
+    Heartbeats: 1008
+
+    GPU Allocation:
+      Context          Total GPUs    Allocated (avg/min/max)      Util% (avg)
+      gke_prod-us      48            38.2 / 16 / 48               79.6%
+        H100           48            38.2 / 16 / 48               79.6%
+
+    GPU-Hours Summary:
+      Context          Total GPU-Hrs    Allocated GPU-Hrs    Idle GPU-Hrs    Idle%
+      gke_prod-us      8064.0           6420.5               1643.5          20.4%
+        H100           8064.0           6420.5               1643.5
+
+    Kueue Borrowing ROI:
+      Context          Queue            Borrowed (avg/min/max)     GPU-Hrs    Value($)
+      gke_prod-us      team-a           4.2 / 0 / 12              705.6      $917.28
+        H100           team-a                                     705.6      $917.28
+
+    Total Allocated GPU-Hours: 6420.5
+    Total Idle GPU-Hours: 1643.5
+    Total Borrowed GPU-Hours: 705.6
+    Estimated ROI for 7d: $917.28
+    Estimated ROI per year: $47,698.56
+
+    Kueue Queue Health:
+      Context          Queue            Admitted (avg/max)     Pending (avg/max)    Preemptions
+      gke_prod-us      team-a           3.2 / 5              0.8 / 3               2
+      gke_prod-us      team-b           2.1 / 4              0.3 / 2               0
+```
+
+The script also generates:
+- **Plots** (with `--plot-dir`): GPU allocation timeseries, utilization heatmaps, fleet overview, Kueue borrowing and queue health charts per server
+- **CSVs** (with `--csv-output`): `report_gpu_allocation.csv`, `report_gpu_hours.csv`, `report_kueue_borrowing.csv`
